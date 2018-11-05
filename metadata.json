@@ -4,8 +4,8 @@
   "author": "SIMP Team",
   "summary": "A SIMP module for setting up a SIMP-specific DogTag CA",
   "license": "Apache-2.0",
-  "source": "https://github.com/simp/pupmod-simp-simp_dogtag",
-  "project_page": "https://github.com/simp/pupmod-simp-simp_dogtag",
+  "source": "https://github.com/simp/pupmod-simp-simp_pki_service",
+  "project_page": "https://github.com/simp/pupmod-simp-simp_pki_service",
   "issues_url": "https://simp-project.atlassian.net",
   "dependencies": [
     {

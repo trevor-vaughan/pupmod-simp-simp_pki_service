@@ -232,4 +232,3 @@ pup5.5.7-fips:
 #  <<: *acceptance_tests
 #  script:
 #    - 'bundle exec rake beaker:suites[default,oel]'
-
