@@ -2,6 +2,8 @@ require 'spec_helper_acceptance'
 
 test_name 'Swap Puppet PKI'
 
+# This just swaps out the certificates for ones generated from dogtag. The next
+# test tries to actually hook puppet together using the new certs.
 describe 'simp_pki_service' do
 
   ca_metadata = {
@@ -18,13 +20,19 @@ describe 'simp_pki_service' do
   }
 
   let(:working_dir) { '/root/pki_puppet_cert_dir' }
-  let(:ca) { hosts_with_role(hosts, 'ca').first }
+  let(:ca) { fact_on(hosts_with_role(hosts, 'ca').first, 'fqdn') }
 
   hosts_with_role(hosts, 'ca').each do |host|
     context "on CA #{host}" do
-
       let(:auth_file) { "/var/lib/pki/simp-puppet-pki/ca/conf/flatfile.txt" }
-      let(:auth_file_content) { hosts.map { |h| "UID:#{h.ip}\nPWD:#{h}" } }
+
+      # NOTE: the flatfile.txt format requires a blank space between entries
+      let(:auth_file_content) {
+        [
+          "UID:127.0.0.1\nPWD:#{fact_on(host, 'fqdn')}",
+          hosts.map { |h| "UID:#{h.ip}\nPWD:#{fact_on(h, 'fqdn')}" }
+        ].flatten.join("\n\n")
+      }
 
       it 'should have passwords set for SCEP requests from all clients' do
         create_remote_file( host, auth_file, auth_file_content)
@@ -50,6 +58,8 @@ describe 'simp_pki_service' do
 
   hosts.each do |host|
     context "on #{host}" do
+      let(:fqdn) { fact_on(host, 'fqdn') }
+
       it 'should have the latest puppet agent' do
         on(host, 'puppet resource package puppet-agent ensure=latest')
       end
@@ -63,14 +73,15 @@ describe 'simp_pki_service' do
       end
 
       it 'should generate a host private key' do
-        on(host, "cd #{working_dir} && openssl genrsa -out #{host}.key 4096")
+        on(host, "cd #{working_dir} && openssl genrsa -out #{fqdn}.key 4096")
       end
 
       it 'should generate a host CSR' do
         if host[:roles].include?('server')
-          subject_alt_name = "subjectAltName = critical,DNS:#{host},DNS:puppet.int.localdomain,DNS:puppet"
+          # Set up the cert the same way that Puppet usually does
+          subject_alt_name = "subjectAltName = critical,DNS:#{fqdn},DNS:puppet.int.localdomain,DNS:puppet"
         else
-          subject_alt_name = "subjectAltName = critical,DNS:#{host}"
+          subject_alt_name = "subjectAltName = critical,DNS:#{fqdn}"
         end
 
         create_remote_file(
@@ -84,10 +95,10 @@ attributes = req_attributes
 req_extensions = v3_req
 
 [ req_attributes ]
-challengePassword = #{host}
+challengePassword=#{fqdn}
 
 [ req_distinguished_name ]
-CN = #{host}
+CN = #{fqdn}
 
 [ v3_req ]
 basicConstraints = CA:FALSE
@@ -97,19 +108,25 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
           EOM
         )
 
-        on(host, "cd #{working_dir} && openssl req -new -sha384 -key #{host}.key -out #{host}.csr -config request.cfg")
+        on(host, "cd #{working_dir} && openssl req -new -sha384 -key #{fqdn}.key -out #{fqdn}.csr -config request.cfg")
       end
 
       it 'should get the CA certificate chain' do
-        on(host, %{openssl s_client -host #{ca} -port 5509 -prexit -showcerts 2>/dev/null < /dev/null | awk '{FS="\\n"; RS="-.*CERTIFICATE.*-";}!seen[$0] && $0 ~ /MII/ {print "-----BEGIN CERTIFICATE-----"$0"-----END CERTIFICATE-----"} {++seen[$0]}' > #{working_dir}/ca.pem})
+        on(host, %{sscep getca -u http://#{ca}:#{ca_metadata['simp-puppet-pki']['http_port']}/ca/cgi-bin/pkiclient.exe -c #{working_dir}/dogtag-ca.crt})
+      end
+
+      it 'should get the CA certificate chain' do
+        # This bunch of nonsense pulls out the entire CA chain into the base
+        # format that Puppet expects
+        on(host, %{openssl s_client -host #{ca} -port 5509 -prexit -showcerts 2>/dev/null < /dev/null | awk '{FS="\\n"; RS="-.*CERTIFICATE.*-";}!seen[$0] && $0 ~ /MII/ {print "-----BEGIN CERTIFICATE-----"$0"-----END CERTIFICATE-----"} {++seen[$0]}' > #{working_dir}/dogtag-ca-chain.pem})
       end
 
       it 'should get the CA CRL' do
-        on(host, %{curl -sk "https://#{ca}:#{ca_metadata['simp-puppet-pki']['https_port']}/ca/ee/ca/getCRL?op=getCRL&crlIssuingPoint=MasterCRL" | openssl crl -inform DER -outform PEM > #{working_dir}/ca_crl.pem})
+        on(host, %{curl -sk "https://#{ca}:#{ca_metadata['simp-puppet-pki']['https_port']}/ca/ee/ca/getCRL?op=getCRL&crlIssuingPoint=MasterCRL" | openssl crl -inform DER -outform PEM > #{working_dir}/dogtag-ca-crl.pem})
       end
 
       it 'should obtain a certificate from the CA' do
-        on(host, %{cd #{working_dir} && sscep enroll -u http://#{ca}:#{ca_metadata['simp-puppet-pki']['http_port']}/ca/cgi-bin/pkiclient.exe -c ca.pem -k #{host}.key -r #{host}.csr -l #{host}.pem})
+        on(host, %{cd #{working_dir} && sscep enroll -u http://#{ca}:#{ca_metadata['simp-puppet-pki']['http_port']}/ca/cgi-bin/pkiclient.exe -c dogtag-ca.crt -k #{fqdn}.key -r #{fqdn}.csr -l #{fqdn}.pem})
       end
 
       if host[:roles].include?('server')
@@ -121,15 +138,15 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
       it 'should replace the puppet certificates' do
         install_cmd = 'install -D -m 600 -o `puppet config print user` -g `puppet config print group`'
 
-        on(host, %{cd #{working_dir} && #{install_cmd} #{host}.pem `puppet config print hostcert --section agent`})
-        on(host, %{cd #{working_dir} && #{install_cmd} #{host}.key `puppet config print hostprivkey --section agent`})
-        on(host, %{cd #{working_dir} && #{install_cmd} ca.pem `puppet config print localcacert --section agent`})
-        on(host, %{cd #{working_dir} && #{install_cmd}  ca_crl.pem `puppet config print hostcrl --section agent`})
-        on(host, %{cd #{working_dir} && #{install_cmd} ca_crl.pem `puppet config print ssldir --section master`/ca/ca_crl.pem})
+        on(host, %{cd #{working_dir} && #{install_cmd} #{fqdn}.pem `puppet config print hostcert --section agent`})
+        on(host, %{cd #{working_dir} && #{install_cmd} #{fqdn}.key `puppet config print hostprivkey --section agent`})
+        on(host, %{cd #{working_dir} && #{install_cmd} dogtag-ca-chain.pem `puppet config print localcacert --section agent`})
+        on(host, %{cd #{working_dir} && #{install_cmd}  dogtag-ca-crl.pem `puppet config print hostcrl --section agent`})
+        on(host, %{cd #{working_dir} && #{install_cmd} dogtag-ca-crl.pem `puppet config print ssldir --section master`/ca/dogtag-ca-crl.pem})
       end
 
       it 'should set the puppet certname' do
-        on(host, "puppet config set certname #{host}")
+        on(host, "puppet config set certname #{fqdn}")
       end
 
       it 'should set CRL checking to false' do
