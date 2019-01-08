@@ -1,3 +1,7 @@
+* Tue Jan 08 2018 Liz Nemsick <lnemsick-simp@gmail.com> - 0.2.0
+- Update documentation
+- Add acceptance tests for obtaining certs via certmonger
+
 * Fri Dec 28 2018 Trevor Vaughan <tvaughan@onyxpoint.com> - 0.2.0
 - Minor breaking changes - Module still **experimental**
 - Fix the configuration variants required for the documented layout

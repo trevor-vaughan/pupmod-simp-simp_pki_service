@@ -249,7 +249,7 @@ for all three aliased CAs.
 
 [root@ca crt_tmp]# openssl pkcs12 -in simp-site-pki-certs.p12 \
 -passin file:$HOME/.dogtag/simp-site-pki/ca/password.conf \
--out simp-site-pki-certs.pem
+-out simp-site-pki-ca-chain.pem
 
 # Split the PEM file out into separate PEM files for each CA
 # This is done to get them into into your NSS database
