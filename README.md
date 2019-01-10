@@ -222,7 +222,7 @@ alias pki-root='pki-root-base -n "caadmin" -P https -p 4509'
 #### Adding CA certs for the BASH aliases
 
 Prior to using the aliases above for regular purposes you need to ensure that
-the CA chains are properly imported into the NSS databases in the disparate
+the CA chains are properly imported into the NSS databases in the corresponding
 `alias` directories listed above.
 
 Don't worry, you only need to do this **once per CA** and it is good to know
@@ -336,11 +336,14 @@ NOTE: You do **NOT** need to restart anything after editing the file!
      -R /etc/pki/simp-pki-root-ca.pem -I /etc/pki/simp-site-pki-ca.pem
    ```
 
-5. Ensure that your default `nssdb` space exists
+5. Ensure that your default `nssdb` space exists, as, under the hood,
+   certmonger uses certutil, which, in turn requires this NSS database
+   to be present:
 
    ```bash
    [root@ca ~]#
      if [ ! -d $HOME/.netscape ]; then
+       mkdir $HOME/.netscape
        certutil -N
      fi
    ```
@@ -381,10 +384,18 @@ not add this capability to all hosts.
 All of the following steps should be done from a host that has access to one of
 the privileged PKI user certificates (in general this is only your CA).
 
-1. Create a certificate request for your host:
+1. Ensure that your default `nssdb` space exists, as certutil requires
+   this NSS database to be present:
 
-   * If you don't have a `~/.netscape` directory, you'll need to run `certutil
-     -N` first!
+   ```bash
+   [root@ca ~]#
+     if [ ! -d $HOME/.netscape ]; then
+       mkdir $HOME/.netscape
+       certutil -N
+     fi
+   ```
+
+2. Create a certificate request for your host:
 
     ```bash
     [root@ca ~]# mkdir -f CMC && cd CMC
@@ -395,7 +406,7 @@ the privileged PKI user certificates (in general this is only your CA).
       -o hostcert.req
     ```
 
-2. Create a `cmc-request.cfg` file with the following content:
+3. Create a `cmc-request.cfg` file with the following content:
 
    ```
    # NSS database directory.
@@ -425,13 +436,13 @@ the privileged PKI user certificates (in general this is only your CA).
    output=/root/CMC/sslserver-cmc-request.bin
    ```
 
-3. Generate the `CMCRequest` *bin* file
+4. Generate the `CMCRequest` *bin* file
 
    ```bash
    [root@ca CMC]# CMCRequest cmc-request.cfg
    ```
 
-4. Create a `cmc-submit.cfg` file with the following content
+5. Create a `cmc-submit.cfg` file with the following content
 
    ```
    # PKI server host name.
@@ -468,13 +479,13 @@ the privileged PKI user certificates (in general this is only your CA).
    output=/root/CMC/sslserver-cmc-response.bin
    ```
 
-5. Submit the CMC Request
+6. Submit the CMC Request
 
    ```bash
    [root@ca CMC]# HttpClient cmc-submit.cfg
    ```
 
-6. Unpack the signed certificate (you only need the CA cert in your `nssdb` for this)
+7. Unpack the signed certificate (you only need the CA cert in your `nssdb` for this)
 
    ```bash
    [root@ca CMC]# CMCResponse -d ~/.dogtag/simp-puppet-pki/ca/alias \
