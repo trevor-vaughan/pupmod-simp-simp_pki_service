@@ -24,18 +24,29 @@ describe 'Client enroll via certmonger'
     end
   end
 
+# indent so this is doe for each ca_host
   describe 'CA client set up' do
-    hosts.each do |host|
+    hosts.each do |client|
       it 'should install, start, and enable certmonger' do
-        host.install_package('certmonger')
-        on(host, 'puppet resource service certmonger ensure=running')
-        on(host, 'puppet resource service certmonger enable=true')
+        client.install_package('certmonger')
+        on(client, 'puppet resource service certmonger ensure=running')
+        on(client, 'puppet resource service certmonger enable=true')
       end
 
       it 'should obtain CA root certificate' do
       end
 
       it 'should obtain CA certificate chain' do
+      end
+
+      it 'should ensure the default NSS database exists' do
+        results = on(client, 'ls /root/.netscape', :accept_all_exit_codes => true)
+        if results.exit_code != 0
+          on(client, 'mkdir /root/.netscape')
+          # Creating a NSS DB without a password is not recommended for a real
+          # system, but OK for this test
+          on(client, 'certutil -N --empty-password')
+        end
       end
     end
   end
