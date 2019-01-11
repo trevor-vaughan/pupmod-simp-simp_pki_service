@@ -90,7 +90,7 @@ describe 'Client enroll via CMC on CA server' do
                  'CMCResponse',
                  "-d /root/.dogtag/#{ca}/ca/alias",
                  "-i #{client_cmc_response_file}",
-                 "> #{client_pkcs7_file}"
+                 "-o #{client_pkcs7_file}"
                  ]
                 on(ca_host, cmd.join(' '))
 

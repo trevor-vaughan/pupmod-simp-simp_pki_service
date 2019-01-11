@@ -33,7 +33,11 @@ describe 'Set up simp_pki_service' do
   # FIXME:
   # - Figure out why sscep enrollment with an SHA384-encrypted request
   #   works in 20_puppet_swap_spec.rb, even though that encryption
-  #   algorithm is **NOT** in ca.scep.allowedEncryptionAlgorithms
+  #   algorithm is **NOT** in ca.scep.allowedHashAlgorithms
+  # - Figure out why requests hashed with SHA1 (i.e., from el6 clients
+  #   when using default openssl parameters used in mkrequest) results
+  #   in a request file that is 'malformed', even though SHA1 is in
+  #   ca.scep.allowedHashAlgorithms
   # - Figure out why the hashAlgorithm is set to MD5 for simp-puppet-pki
   #   and document
   let(:hieradata) {
