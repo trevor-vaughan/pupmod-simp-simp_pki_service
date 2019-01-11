@@ -395,15 +395,19 @@ the privileged PKI user certificates (in general this is only your CA).
      fi
    ```
 
-2. Create a certificate request for your host:
+2. Create a certificate request for your host, using a seed of 512
+   bytes from /dev/urandom:
 
     ```bash
     [root@ca ~]# mkdir -f CMC && cd CMC
-    [root@ca CMC]# certutil -R -s "cn=`hostname -f`,ou=Hosts,dc=your,dc=domain" \
+    [root@ca CMC]# dd if=/dev/urandom of=seed count=1
+    [root@ca CMC]# certutil -R \
+      -s "cn=`hostname -f`,ou=Hosts,dc=your,dc=domain" \
       -k rsa \
       -g 4096 \
       -Z SHA384 \
-      -o hostcert.req
+      -z seed \
+      | openssl req -inform DER -outform PEM > hostcert.req
     ```
 
 3. Create a `cmc-request.cfg` file with the following content:
@@ -485,12 +489,27 @@ the privileged PKI user certificates (in general this is only your CA).
    [root@ca CMC]# HttpClient cmc-submit.cfg
    ```
 
-7. Unpack the signed certificate (you only need the CA cert in your `nssdb` for this)
+7. Unpack the signed certificate along with its certificate chain into
+   a PKCS #7 PEM-formatted file:
+   `nssdb` for this):
 
    ```bash
    [root@ca CMC]# CMCResponse -d ~/.dogtag/simp-puppet-pki/ca/alias \
-     -i sslserver-cmc-response.bin > signed_host_cert.pub
+     -i sslserver-cmc-response.bin -o signed_host_cert_chain.p7b
    ```
+8. Extract the all the certificates in the chain from the PKCS #7 file
+   into a single file:
+
+   ```bash
+   [root@ca CMC]# openssl pkcs7 -print_certs \
+      -in signed_host_cert_chain.p7b \
+      -out signed_host_cert_chain.pem
+   ```
+
+9. Manually save the new certificate to its own file, move
+   to the appropriate directory and ensure the file has the SELinux
+   context `cert_t`.
+
 
 #### Listing Certificates
 

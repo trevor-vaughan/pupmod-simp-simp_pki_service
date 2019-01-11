@@ -28,20 +28,27 @@ describe 'Set up simp_pki_service' do
   }
 
   # This is needed to lower the SCEP ciphers down to the defaults used by sscep
-  # and certmonger by default
+  # and certmonger
+  # (dogtag's default config can be found at /usr/share/pki/ca/conf/CS.cfg)
+  # FIXME:
+  # - Figure out why sscep enrollment with an SHA384-encrypted request
+  #   works in 20_puppet_swap_spec.rb, even though that encryption
+  #   algorithm is **NOT** in ca.scep.allowedEncryptionAlgorithms
+  # - Figure out why the hashAlgorithm is set to MD5 for simp-puppet-pki
+  #   and document
   let(:hieradata) {
     <<-EOS
       simp_pki_service::custom_cas:
         'simp-puppet-pki':
           'ca_config':
             'ca.scep.allowedEncryptionAlgorithms': 'DES,DES3'
-            'ca.scep.EncryptionAlgorithm': 'DES'
+            'ca.scep.encryptionAlgorithm': 'DES'
             'ca.scep.allowedHashAlgorithms': 'MD5,SHA1,SHA256,SHA512'
-            'ca.scep.HashAlgorithm': 'MD5'
+            'ca.scep.hashAlgorithm': 'MD5'
         'simp-site-pki':
           'ca_config':
             'ca.scep.allowedEncryptionAlgorithms': 'DES,DES3'
-            'ca.scep.EncryptionAlgorithm': 'DES'
+            'ca.scep.encryptionAlgorithm': 'DES'
             'ca.scep.allowedHashAlgorithms': 'MD5,SHA1,SHA256,SHA512'
     EOS
   }

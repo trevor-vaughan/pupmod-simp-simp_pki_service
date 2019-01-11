@@ -23,6 +23,43 @@ module Acceptance
         create_remote_file(ca_host, auth_file, auth_file_content)
       end
 
+      # Extracts the certificate for a specified subject from a PKCS #7
+      # PEM-formatted file and writes it to a PEM-formatted output file.
+      #
+      # @fails if a certificat for the specified subject does not exist
+      #        in the PKCS #7 input file
+      #
+      # +host+:          Host object for the server where the input file
+      #                  resides
+      # +pkcs7_file+:    PCKS #7 input file derived from a CMC response
+      #                  file. It contains the CA cert chain for the cert
+      #                  having the specified subject.
+      # +cert_file+:     Output certificate file
+      # +cert_subject+:  Certificate subject, excluding the 'cn=' or 'CN='
+      def extract_cert_from_pkcs7(host, pkcs7_file, cert_file, cert_subject)
+        # Extract certs in the cert chain from PCKS #7
+        cert_chain_file = "#{pkcs7_file}.pem"
+        on(host, "openssl pkcs7 -print_certs -in #{pkcs7_file} -out #{cert_chain_file}")
+        cert_chains = on(host, "cat #{cert_chain_file}").stdout.split("\n\n")
+
+        cert_content = nil
+        cert_chains.each do |cert|
+          unless cert.match(/^subject.*CA Signing Certificate$/)
+            if cert.match(/CN=#{cert_subject}/)
+              cert_content = cert.gsub(/^.*BEGIN /m,'-----BEGIN ')
+            end
+          end
+        end
+
+        if cert_content
+          create_remote_file(host, cert_file, cert_content)
+        else
+          # To aid debug, print out certs from the PKCS #7 file
+          on(host, "openssl pkcs7 -print_certs -in #{pkcs7_file}")
+          fail("Certificate for '#{cert_subject}' does not exist in #{pkcs7_file} on #{host}")
+        end
+      end
+
       # Generate a CMC request (bin) file and a corresponding CMC
       # config file, both of which are required to submit the
       # certificate request to the CA using CMC.
@@ -49,7 +86,7 @@ module Acceptance
         generate_cmc_request_cfg(cfg)
 
         # using the CMC config file, generate the CMC request file
-        on(ca_host, "CMCRequest #{cfg[:files][:cmc_request_cfg]}")
+        on(cfg[:ca][:host], "CMCRequest #{cfg[:files][:cmc_request_cfg]}")
 
         # create a CMC submit config file that specifies how to
         # generate the CMC response from the CMC request
@@ -85,7 +122,7 @@ input=#{cfg[:files][:cert_request]}
 output=#{cfg[:files][:cmc_request]}
         EOM
 
-        create_remote_file(ca_host, cfg[:files][:cmc_request_cfg], cfg_content)
+        create_remote_file(cfg[:ca][:host], cfg[:files][:cmc_request_cfg], cfg_content)
       end
 
       def generate_cmc_submit_cfg(cfg)
@@ -125,7 +162,7 @@ input=#{cfg[:files][:cmc_request]}
 output=#{cfg[:files][:cmc_response]}
         EOM
 
-        create_remote_file(ca_host, cfg[:files][:cmc_submit_cfg], cfg_content)
+        create_remote_file(cfg[:ca][:host], cfg[:files][:cmc_submit_cfg], cfg_content)
       end
 
       # @returns Certificate list for the specified CA
@@ -164,7 +201,7 @@ output=#{cfg[:files][:cmc_response]}
       # +ca_https_port+: HTTPS port to use to communicate with the CA
       # +cert_host+:     Host object on which the certificate file resides
       # +cert_file+:     Path to the certificate file
-      # +cert_subject+:  Path to the certificate file
+      # +cert_subject+:  Certificate subject, excluding the 'cn=' or 'CN='
       #
       def verify_cert(ca_host, ca, ca_https_port, cert_host, cert_file, cert_subject)
          cert_text = on(cert_host, "openssl x509 -in #{cert_file} -text -noout").stdout
