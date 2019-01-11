@@ -16,10 +16,10 @@ describe 'Client enroll via certmonger'
   }
 
 
-  hosts_with_role(hosts, 'ca').each do |host|
+  hosts_with_role(hosts, 'ca').each do |ca_host|
     context "on CA #{host}" do
       it 'should set one time passwords for simp-site-pki SCEP requests from all clients' do
-        create_scep_otps(hosts, host, 'simp-site-pki', 'one_time_password')
+        create_scep_otps(hosts, ca_host, 'simp-site-pki', 'one_time_password')
       end
     end
   end

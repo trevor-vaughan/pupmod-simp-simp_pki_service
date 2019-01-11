@@ -48,14 +48,17 @@ describe 'Obtain SCEP certificates using sscep' do
             end
 
             if client.host_hash[:platform] =~ /el-6/
+              # don't know why this is failing...can use sscep to enroll from an el6 host
+              # in 20_puppet_swap_spec.rb, but the config used to generate the csr
+              # is not the same
               pending 'should enroll the certificate from an el6 host' do
-                on(client, "cd #{working_dir} && sscep enroll -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c ca.crt -k local.key -r local.csr -l cert.crt")
+                on(client, "cd #{working_dir} && sscep enroll -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c ca.crt -k local.key -r local.csr -l cert.crt -v -d")
 
                 verify_cert(ca_host, ca, info[:https_port], client, "#{working_dir}/cert.crt", client_ip)
               end
             else
               it 'should enroll the certificate from an el7 host' do
-                on(client, "cd #{working_dir} && sscep enroll -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c ca.crt -k local.key -r local.csr -l cert.crt")
+                on(client, "cd #{working_dir} && sscep enroll -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c ca.crt -k local.key -r local.csr -l cert.crt -v -d")
 
                 verify_cert(ca_host, ca, info[:https_port], client, "#{working_dir}/cert.crt", client_ip)
               end

@@ -208,7 +208,7 @@ output=#{cfg[:files][:cmc_response]}
          expect( cert_text ).to match Regexp.escape("Issuer: O=SIMP, OU=#{ca}, CN=CA Signing Certificate")
          expect( cert_text ).to match Regexp.escape("Subject: CN=#{cert_subject}")
 
-         match_data = cert_text.match(/Serial Number: [0-9]+ \(([0-9xX]+)\)/)
+         match_data = cert_text.match(match(/Serial Number: [0-9]+ \((0[xX]{1}[0-9a-fA-F]+)\)/)
          expect( match_data ).to_not be_nil
          serial_num = match_data[1]
          expect( serial_num ).to_not be_nil

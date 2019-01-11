@@ -100,7 +100,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
         on(host, "cd #{working_dir} && openssl req -new -sha384 -key #{fqdn}.key -out #{fqdn}.csr -config request.cfg")
       end
 
-      it 'should get the CA certificate chain' do
+      it 'should get the simp-puppet-pki CA certificate' do
         on(host, %{sscep getca -u http://#{ca}:#{ca_metadata['simp-puppet-pki'][:http_port]}/ca/cgi-bin/pkiclient.exe -c #{working_dir}/dogtag-ca.crt})
       end
 
