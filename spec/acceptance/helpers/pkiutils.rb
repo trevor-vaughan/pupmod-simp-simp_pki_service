@@ -126,7 +126,7 @@ output=#{cfg[:files][:cmc_request]}
       end
 
       def generate_cmc_submit_cfg(cfg)
-        ca_fqdn = fact_on(ca_host, 'fqdn')
+        ca_fqdn = fact_on(cfg[:ca][:host], 'fqdn')
         cfg_content = <<-EOM
 # PKI server host name.
 host=#{ca_fqdn}
