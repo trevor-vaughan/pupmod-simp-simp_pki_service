@@ -1,0 +1,7 @@
+- figure out how to intall CA pem files needed for certmonger
+  - lift existing code or smash in by copying from dir during NSS install on CA?
+- Rough in certmonger test but allow to fail
+- figure out el6 est problem
+  - look at enroll debug output comparing el6 and el7
+  - generate enroll debug output for puppet cert test and compare
+- Add tests to revoke and get crl
