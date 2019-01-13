@@ -29,7 +29,19 @@ describe 'Set up simp_pki_service' do
 
   # This is needed to lower the SCEP ciphers down to the defaults used by sscep
   # and certmonger
-  # (dogtag's default config can be found at /usr/share/pki/ca/conf/CS.cfg)
+  # - The dogtag configuration files impacted by the hieradata below are as follows:
+  #   - /etc/pki/simp-pki-root/ca/CS.cfg
+  #   - /etc/pki/simp-puppet-pki/ca/CS.cfg
+  #   - /etc/pki/simp-site-pki/ca/CS.cfg
+  #   NOTE:  The default config delivered with dogtag can be found at
+  #          /usr/share/pki/ca/conf/CS.cfg
+  # - simp-site-pki ca.scep.encryptionAlgorithm and ca.scep.hashAlgorithm
+  #   are set to DES and MD5, respectively, to test integration with
+  #   certmonger < 0.79.6.   Per https://pagure.io/certmonger/issue/89,
+  #   for certmonger < 0.79.6, when negotiating encryption and hashes
+  #   via SCEP, certmonger falls back to its defaults of MD5 and DES,
+  #   because dogtag doesn't support the GetCACaps command.
+  #
   # FIXME:
   # - Figure out why sscep enrollment with an SHA384-encrypted request
   #   works in 20_puppet_swap_spec.rb, even though that encryption
@@ -54,6 +66,7 @@ describe 'Set up simp_pki_service' do
             'ca.scep.allowedEncryptionAlgorithms': 'DES,DES3'
             'ca.scep.encryptionAlgorithm': 'DES'
             'ca.scep.allowedHashAlgorithms': 'MD5,SHA1,SHA256,SHA512'
+            'ca.scep.hashAlgorithm': 'MD5'
     EOS
   }
 

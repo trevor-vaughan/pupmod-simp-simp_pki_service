@@ -1,5 +1,4 @@
 require 'spec_helper_acceptance'
-=begin
 
 test_name 'Client enroll via certmonger'
 
@@ -15,66 +14,85 @@ describe 'Client enroll via certmonger'
     }
   }
 
+  ca   = 'simp-site-pki'
+  info = ca_metadata['simp-site-pki']
 
   hosts_with_role(hosts, 'ca').each do |ca_host|
-    context "on CA #{host}" do
-      it 'should set one time passwords for simp-site-pki SCEP requests from all clients' do
-        create_scep_otps(hosts, ca_host, 'simp-site-pki', 'one_time_password')
-      end
-    end
-  end
+    context "CA server #{ca_host}" do
+      let(:ca_hostname) { fact_on(ca_host, 'fqdn') }
 
-# indent so this is doe for each ca_host
-  describe 'CA client set up' do
-    hosts.each do |client|
-      it 'should install, start, and enable certmonger' do
-        client.install_package('certmonger')
-        on(client, 'puppet resource service certmonger ensure=running')
-        on(client, 'puppet resource service certmonger enable=true')
+      context "on CA server #{ca_host} for CA #{ca}" do
+        it "should set one time passwords for #{ca} SCEP requests from all clients" do
+        create_scep_otps(hosts, ca_host, ca, :one_time_password.to_s)
       end
 
-      it 'should obtain CA root certificate' do
-      end
+      hosts.each do |client|
+        context "on client #{client}" do
+          let(:client_fqdn) { fact_on(client, 'fqdn') }
 
-      it 'should obtain CA certificate chain' do
-      end
+          it 'should install, start, and enable certmonger' do
+            client.install_package('certmonger')
+            on(client, 'puppet resource service certmonger ensure=running')
+            on(client, 'puppet resource service certmonger enable=true')
+          end
 
-      it 'should ensure the default NSS database exists' do
-        results = on(client, 'ls /root/.netscape', :accept_all_exit_codes => true)
-        if results.exit_code != 0
-          on(client, 'mkdir /root/.netscape')
-          # Creating a NSS DB without a password is not recommended for a real
-          # system, but OK for this test
-          on(client, 'certutil -N --empty-password')
+          it 'should obtain CA root certificate' do
+            # Real distribution mechanism TBD.  Can parse certs_info in commented
+            # out code for root cert, but choosing lazy method in the test
+            #
+            #certs_info = on(host, "openssl s_client -host #{ca_hostname} -port #{info[:https_port]} -prexit -showcerts 2>/dev/null < /dev/null")
+            cert = on(ca_host, "cat /root/.dogtag/crt_tmp_#{ca}/ca_certs/CA*.pem").stdout
+            create_remote_file(client, '/etc/pki/simp-pki-root-ca.pem', cert)
+            on(client, 'ls -Z /etc/pki/simp-pki-root-ca.pem')
+          end
+
+          it 'should obtain CA certificate ' do
+            # Real distribution mechanism TBD
+            on(client, "sscep getca -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c /etc/pki/#{ca}-ca.pem" )
+            on(client, "ls -Z /etc/pki/#{ca}-ca.pem")
+          end
+
+          it 'should add the CA to certmonger' do
+            cmd = [
+              'getcert add-scep-ca',
+              '-c SIMP_Site',
+              "-u https://#{ca_hostname}:#{info[:https_port]}/ca/cgi-bin/pkiclient.exe",
+              '-R /etc/pki/simp-pki-root-ca.pem',
+              "-I /etc/pki/#{ca}-ca.pem"
+            ]
+
+            on(client, cmd.join(' '))
+          end
+
+          it 'should ensure the default NSS database exists' do
+            results = on(client, 'ls /root/.netscape', :accept_all_exit_codes => true)
+            if results.exit_code != 0
+              on(client, 'mkdir /root/.netscape')
+              # Creating a NSS DB without a password is not recommended for a real
+              # system, but OK for this test
+              on(client, 'certutil -N --empty-password')
+            end
+          end
+
+          pending 'should request a certificate using certmonger' do
+            cmd = [
+              'getcert request',
+              '-c SIMP_Site',
+              "-k /etc/pki/#{client_fqdn}.pem",
+              "-f /etc/pki/#{client_fqdn}.pub",
+              "-I #{client_fqdn}",
+              '-r -w -v',
+              "-L #{:one_time_password.to_s}"
+            ]
+
+            on(client, cmd.join(' '))
+            on(client, 'getcert list')
+
+            on(client, "ls /etc/pki/#{client_fqdn}.pub")
+            verify_cert(ca_host, ca, info[:https_port], client, "/etc/pki/#{client_fqdn}.pub", client_fqdn)
+          end
         end
       end
     end
   end
-
-  hosts.each do |host|
-    context "on #{host}" do
-      let(:fqdn) { fact_on(host, 'fqdn') }
-
-      it 'should have a working dir' do
-        host.mkdir_p(working_dir)
-      end
-
-      it 'should get the CA certificate chain' do
-        on(host, %{sscep getca -u http://#{ca}:#{ca_metadata['simp-puppet-pki']['http_port']}/ca/cgi-bin/pkiclient.exe -c #{working_dir}/dogtag-ca.crt})
-      end
-
-      it 'should get the CA certificate chain' do
-        # This bunch of nonsense pulls out the entire CA chain into the base
-        # format that Puppet expects
-        on(host, %{openssl s_client -host #{ca} -port 5509 -prexit -showcerts 2>/dev/null < /dev/null | awk '{FS="\\n"; RS="-.*CERTIFICATE.*-";}!seen[$0] && $0 ~ /MII/ {print "-----BEGIN CERTIFICATE-----"$0"-----END CERTIFICATE-----"} {++seen[$0]}' > #{working_dir}/dogtag-ca-chain.pem})
-      end
-
-      it 'should get the CA CRL' do
-        on(host, %{curl -sk "https://#{ca}:#{ca_metadata['simp-puppet-pki']['https_port']}/ca/ee/ca/getCRL?op=getCRL&crlIssuingPoint=MasterCRL" | openssl crl -inform DER -outform PEM > #{working_dir}/dogtag-ca-crl.pem})
-      end
-
-    end
-  end
-
 end
-=end

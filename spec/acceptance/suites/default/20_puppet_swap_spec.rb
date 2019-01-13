@@ -107,7 +107,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
       it 'should get the CA certificate chain' do
         # This bunch of nonsense pulls out the entire CA chain into the base
         # format that Puppet expects
-        on(host, %{openssl s_client -host #{ca} -port 5509 -prexit -showcerts 2>/dev/null < /dev/null | awk '{FS="\\n"; RS="-.*CERTIFICATE.*-";}!seen[$0] && $0 ~ /MII/ {print "-----BEGIN CERTIFICATE-----"$0"-----END CERTIFICATE-----"} {++seen[$0]}' > #{working_dir}/dogtag-ca-chain.pem})
+        on(host, %{openssl s_client -host #{ca} -port #{ca_metadata['simp-puppet-pki'][:https_port]} -prexit -showcerts 2>/dev/null < /dev/null | awk '{FS="\\n"; RS="-.*CERTIFICATE.*-";}!seen[$0] && $0 ~ /MII/ {print "-----BEGIN CERTIFICATE-----"$0"-----END CERTIFICATE-----"} {++seen[$0]}' > #{working_dir}/dogtag-ca-chain.pem})
       end
 
       it 'should get the CA CRL' do
@@ -115,7 +115,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
       end
 
       it 'should obtain a certificate from the CA' do
-        on(host, %{cd #{working_dir} && sscep enroll -u http://#{ca}:#{ca_metadata['simp-puppet-pki'][:http_port]}/ca/cgi-bin/pkiclient.exe -c dogtag-ca.crt -k #{fqdn}.key -r #{fqdn}.csr -l #{fqdn}.pem})
+        on(host, %{cd #{working_dir} && sscep enroll -u http://#{ca}:#{ca_metadata['simp-puppet-pki'][:http_port]}/ca/cgi-bin/pkiclient.exe -c dogtag-ca.crt -k #{fqdn}.key -r #{fqdn}.csr -l #{fqdn}.pem -v -d})
 
         cert_list = get_cert_list(ca_host, 'simp-puppet-pki', ca_metadata['simp-puppet-pki'][:https_port])
         expect( cert_list ).to match(/Subject DN: CN=#{fqdn}/)
