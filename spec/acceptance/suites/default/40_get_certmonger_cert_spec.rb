@@ -36,20 +36,23 @@ describe 'Client enroll via certmonger'
             on(client, 'puppet resource service certmonger enable=true')
           end
 
-          it 'should obtain CA root certificate' do
-            # Real distribution mechanism TBD.  Can parse certs_info in commented
-            # out code for root cert, but choosing lazy method in the test
-            #
-            #certs_info = on(host, "openssl s_client -host #{ca_hostname} -port #{info[:https_port]} -prexit -showcerts 2>/dev/null < /dev/null")
-            cert = on(ca_host, "cat /root/.dogtag/crt_tmp_#{ca}/ca_certs/CA*.pem").stdout
-            create_remote_file(client, '/etc/pki/simp-pki-root-ca.pem', cert)
-            on(client, 'ls -Z /etc/pki/simp-pki-root-ca.pem')
-          end
+          it 'should obtain CA certificates' do
+            # Real distribution mechanism TBD.  Using insecure pull for test simplicity.
+            cmd = [
+              '/usr/libexec/certmonger/scep-submit',
+              "-u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe",
+              '-C' # retrieve CA certificates
+            ]
+            certs = on(client, cmd.join(' ')).stdout.split("-----END CERTIFICATE-----\n")
+            certs.map! { |cert| cert.strip + "\n-----END CERTIFICATE-----\n" }
 
-          it 'should obtain CA certificate ' do
-            # Real distribution mechanism TBD
-            on(client, "sscep getca -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c /etc/pki/#{ca}-ca.pem" )
+            # 1st certificate is for simp-site-pki
+            create_remote_file(client, "/etc/pki/#{ca}-ca.pem", certs[1])
             on(client, "ls -Z /etc/pki/#{ca}-ca.pem")
+
+            # 2nd certificate is for simp-pki-root
+            create_remote_file(client, '/etc/pki/simp-pki-root-ca.pem', certs[1])
+            on(client, 'ls -Z /etc/pki/simp-pki-root-ca.pem')
           end
 
           it 'should add the CA to certmonger' do
