@@ -47,7 +47,7 @@ describe 'Client enroll via certmonger'
             certs.map! { |cert| cert.strip + "\n-----END CERTIFICATE-----\n" }
 
             # 1st certificate is for simp-site-pki
-            create_remote_file(client, "/etc/pki/#{ca}-ca.pem", certs[1])
+            create_remote_file(client, "/etc/pki/#{ca}-ca.pem", certs[0])
             on(client, "ls -Z /etc/pki/#{ca}-ca.pem")
 
             # 2nd certificate is for simp-pki-root
