@@ -23,7 +23,7 @@ describe 'Client enroll via certmonger'
 
       context "on CA server #{ca_host} for CA #{ca}" do
         it "should set one time passwords for #{ca} SCEP requests from all clients" do
-        create_scep_otps(hosts, ca_host, ca, :one_time_password.to_s)
+        create_scep_otps(hosts, ca_host, ca, "one-time-password")
       end
 
       hosts.each do |client|
@@ -77,7 +77,7 @@ describe 'Client enroll via certmonger'
             end
           end
 
-          pending 'should request a certificate using certmonger' do
+          it 'should request a certificate using certmonger' do
             cmd = [
               'getcert request',
               '-c SIMP_Site',
@@ -85,7 +85,7 @@ describe 'Client enroll via certmonger'
               "-f /etc/pki/#{client_fqdn}.pub",
               "-I #{client_fqdn}",
               '-r -w -v',
-              "-L #{:one_time_password.to_s}"
+              "-L one-time-password"
             ]
 
             on(client, cmd.join(' '))

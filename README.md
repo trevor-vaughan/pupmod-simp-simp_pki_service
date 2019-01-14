@@ -331,10 +331,12 @@ The file is organized as a set of paired values, one for the **IP address**
 time use, password that will be used by the client during enrollment. Each
 pair **must** be separated by a blank line.
 
+**WARNING**: the `PWD` entries can not contain underscores `_`!
+
 **Example**
 
     UID:1.2.3.4
-    PWD:my_one_time_password
+    PWD:my-one-time-password
 
     UID:1.2.3.5
     PWD:your_one_time_password

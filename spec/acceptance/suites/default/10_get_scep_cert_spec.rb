@@ -17,7 +17,7 @@ describe 'Obtain SCEP certificates using sscep' do
   hosts_with_role(hosts, 'ca').each do |ca_host|
     context "CA server #{ca_host}" do
       let(:ca_hostname) { fact_on(ca_host, 'fqdn') }
-      let(:one_time_password) { 'one_time_password' }
+      let(:one_time_password) { 'one-time-password' }
 
       ca_metadata.each do |ca, info|
         context "on CA server #{ca_host} for CA #{ca}" do
@@ -51,7 +51,7 @@ describe 'Obtain SCEP certificates using sscep' do
               # don't know why this is failing...can use sscep to enroll from an el6 host
               # in 20_puppet_swap_spec.rb, but the config used to generate the csr
               # is not the same
-              pending 'should enroll the certificate from an el6 host' do
+              it 'should enroll the certificate from an el6 host' do
                 on(client, "cd #{working_dir} && sscep enroll -u http://#{ca_hostname}:#{info[:http_port]}/ca/cgi-bin/pkiclient.exe -c ca.crt -k local.key -r local.csr -l cert.crt -v -d")
 
                 verify_cert(ca_host, ca, info[:https_port], client, "#{working_dir}/cert.crt", client_ip)
