@@ -279,23 +279,65 @@ done
 
 ### Certificate Operations
 
-#### Certmonger SCEP
+#### Certificate Enrollment
 
-##### Server Setup
+This section describe three different certificate enrollment options, each
+of which has been exercised in this module's acceptance tests.
 
-You will first need to edit the `flatfile.txt` file in the appropriate CA.
+A summary of these options is listed in the following table:
+
+| Option          | Pros                   | Cons                                        |
+| --------------- | ---------------------- | ------------------------------------------- |
+| certmonger SCEP | Enrollment via HTTP(S) | MD5 + DES when communicating with `dogtag`  |
+|                 | Automatic cert refresh |                                             |
+|                 | Simple API             |                                             |
+|                 | Single use passwords   |                                             |
+|                 |                        |                                             |
+| SSCEP           | Simple API             | Enrollment via HTTP only                    |
+|                 | Single use passwords   | Only MD5 or SHA1 for fingerprints or PKCS#7 |
+|                 |                        |                                             |
+|                 |                        |                                             |
+| CMC             |                        | Only appropriate (secure) on CA server      |
+|                 |                        | Clunky API                                  |
+
+
+##### Certmonger SCEP
+
+---
+
+**IMPORTANT:** For certmonger < 0.79.6, this will **NOT** work properly due to a bug in
+`certmonger` and an associated bug in `dogtag` which, combined, result in the
+inability to negotiate a proper cipher set for SCEP communication.
+
+  * https://pagure.io/certmonger/issue/89
+  * https://pagure.io/dogtagpki/issue/627
+
+---
+
+Certmonger allows clients to obtain certificates from CAs via SCEP.  Each
+SCEP request is validated via a one time password linked to the client's
+IP address.  Requests can be sent over HTTPS (preferred) or HTTP.
+
+###### Server Setup
+
+Each CA has a text file, `flatfile.txt`, that contains the per-client one
+time passwords.
 
 For the `site-pki` CA, this would be in
 `/var/lib/pki/simp-site-pki/ca/conf/flatfile.txt`.
 
 The file is organized as a set of paired values, one for the **IP address**
 (not hostname) of the client that will be enrolling and the other a unique, one
-time use, password that will be used by the client during enrollment.
+time use, password that will be used by the client during enrollment. Each
+pair **must** be separated by a blank line.
 
 **Example**
 
     UID:1.2.3.4
     PWD:my_one_time_password
+
+    UID:1.2.3.5
+    PWD:your_one_time_password
 
 ---
 
@@ -303,15 +345,15 @@ NOTE: You do **NOT** need to restart anything after editing the file!
 
 ---
 
-##### Client Setup
+###### Client Setup
 
 1. Ensure that the `certmonger` package is installed and that the `certmonger`
    process is running and enabled.
 
    ```bash
-   [root@ca ~]# yum -y install certmonger
-   [root@ca ~]# systemctl start certmonger
-   [root@ca ~]# systemctl enable certmonger
+   [root@client ~]# yum -y install certmonger
+   [root@client ~]# systemctl start certmonger
+   [root@client ~]# systemctl enable certmonger
    ```
 
 2. Obtain the **root** certificate for the CA that you will be connecting to. In
@@ -331,7 +373,7 @@ NOTE: You do **NOT** need to restart anything after editing the file!
 4. Add the CA to `certmonger`:
 
    ```bash
-   [root@ca ~]# getcert add-scep-ca -c SIMP_Site \
+   [root@client ~]# getcert add-scep-ca -c SIMP_Site \
      -u https://ca.your.domain:8443/ca/cgi-bin/pkiclient.exe \
      -R /etc/pki/simp-pki-root-ca.pem -I /etc/pki/simp-site-pki-ca.pem
    ```
@@ -341,7 +383,7 @@ NOTE: You do **NOT** need to restart anything after editing the file!
    to be present:
 
    ```bash
-   [root@ca ~]#
+   [root@client ~]#
      if [ ! -d $HOME/.netscape ]; then
        mkdir $HOME/.netscape
        certutil -N
@@ -351,7 +393,7 @@ NOTE: You do **NOT** need to restart anything after editing the file!
 6. Request a certificate using `certmonger`:
 
    ```bash
-   [root@ca ~]# getcert request -c SIMP_Site -k /etc/pki/host_cert.pem \
+   [root@client ~]# getcert request -c SIMP_Site -k /etc/pki/host_cert.pem \
      -f /etc/pki/host_cert.pub \
      -I Host_Cert_Nickname \
      -r -w -L <password from server setup step>
@@ -360,18 +402,61 @@ NOTE: You do **NOT** need to restart anything after editing the file!
    **NOTE:** The target for the public and private keys **must** have context
    `cert_t` for `certmonger` to be able to write the keys appropriately.
 
----
 
-**IMPORTANT:** Presently this will **NOT** work properly due to a bug in
-`certmonger` and an associated bug in `dogtag` which, combined, result in the
-inability to negotiate a proper cipher set for SCEP communication.
+##### SSCEP Enrollment
 
-  * https://pagure.io/certmonger/issue/89
-  * https://pagure.io/dogtagpki/issue/627
+[SSCEP](https://github.com/certnanny/sscep) allows clients to obtain certificates
+from CAs via SCEP.  Each SCEP request is validated via a one time password linked
+to the client's IP address.  Requests can only be sent over HTTP.
 
----
+###### Server Setup
 
-#### CMC Manual Enrollment
+You must set one time passwords for each client on the CA server, exactly as
+is described in [Server Setup for Certmonger](#server-setup).
+
+###### Client Setup
+
+1. Ensure that the `sscep` package is installed.
+
+   ```bash
+   [root@client ~]# yum -y install sscep
+   ```
+
+2. Obtain the CA certificate for the CA that you will be connecting to.  In this
+   example, we will be connecting to the `simp-site-pki` CA.
+
+   ```bash
+   [root@client ~]# sscep getca \
+     -u http://ca.your.domain:8080/ca/cgi-bin/pkiclient.exe \
+     -c ca.crt
+   ```
+
+3. Create a certificate request.
+
+   * For simple cases, you can use the `mkrequest` script provided by the `sscep`
+     package. This will create `local.key` and `local.csr` files.
+
+     ```bash
+     [root@client ~]# mkrequest -ip `hostname -i` <password from server setup step>
+     ```
+   * For cases, in which you need to customize the CSR beyond what is provided
+     by `mkrequest` script, you can use `openssl genrsa` and `openssl req` to
+     generate the key and CSR files, respectively. A complete example that uses
+     those `openssl` commands can be found in the Puppet certificate replacement
+     test, `spec/acceptance/suites/default/20_puppet_swap_spec.rb`.
+
+4. Request a certificate using `sscep`:
+
+   ```bash
+   [root@client ~]# sscep enroll \
+     -u http://ca.your.domain:8080/ca/cgi-bin/pkiclient.exe \
+     -c ca.crt \
+     -k local.key \
+     -r local.csr \
+     -l cert.crt
+   ```
+
+##### CMC Manual Enrollment
 
 An alternate method for certificate enrollment,
 [CMC](https://tools.ietf.org/html/rfc5273) may be used if you need to generate
